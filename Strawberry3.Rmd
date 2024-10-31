@@ -1,0 +1,113 @@
+---
+title: "Stawberry3"
+output: pdf_document
+author: Ziheng Li
+date: "2024-10-31"
+---
+
+```{r}
+
+library(magrittr)
+library(dplyr)
+library(stringr)
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(PubChemR)
+
+```
+
+```{r}
+strawberry_chem <- read_csv("survey_d_chem.csv",show_col_types = FALSE)
+chemical_type <- strawberry_chem$type
+head(chemical_type)
+```
+```{r}
+
+california_data <- filter(strawberry_chem, State == "CALIFORNIA")
+unique_types <- unique(california_data$type)
+print(unique_types)
+
+```
+
+```{r}
+strawberry_chem$Value <- as.numeric(as.character(strawberry_chem$Value))
+
+# Define a function to filter data by type, compute mean values, and plot top 20 chemicals
+plot_top_20_chemicals <- function(type_name) {
+  # Filter data by type and calculate mean values
+  type_data <- strawberry_chem %>%
+    filter(type == type_name) %>%
+    group_by(chem_name) %>%
+    summarise(mean_value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+    arrange(desc(mean_value)) %>%
+    slice_head(n = 20)
+  
+  # Plotting the top 20 chemicals
+  plot <- ggplot(type_data, aes(x = reorder(chem_name, -mean_value), y = mean_value, fill = chem_name)) +
+    geom_col() +
+    coord_flip() +  # Flips the axes for better label readability
+    labs(x = "Chemical Name", y = "Average Value", title = paste("Top 20 Average Values in", type_name)) +
+    theme_minimal() +
+    theme(axis.text.y = element_text(size = 5))  # Adjust text size for readability
+  
+  print(plot)
+}
+
+# Apply the function to each type
+plot_top_20_chemicals("FUNGICIDE")
+```
+Fungicides: The chart shows a range of chemicals for which the mean values for phenyl ether metronidazole and tetraconazole are significantly higher, indicating higher utilization, efficacy or cost.
+
+```{r}
+plot_top_20_chemicals("INSECTICIDE")
+```
+Insecticides: Azadirachtin and Spinetoram lead in average values, suggesting their major roles in insect control. Azadirachtin, derived from neem trees, also suggests a preference for bio-based insecticides.The wide range of chemicals indicates a variety of approaches to pest management, reflecting different application requirements and target species.
+```{r}
+plot_top_20_chemicals("OTHER")
+```
+
+Other: The high average values of these chemicals could reflect their crucial role in preparing fields for planting by controlling soil-borne pests and diseases.
+```{r}
+plot_top_20_chemicals("HERBICIDE")
+```
+Herbicides: The dominance of Oxyfluorfen and Paraquat in average values points to their widespread use, possibly due to their effectiveness in controlling a broad range of weeds.The presence of several different active ingredients suggests a strategic approach to herbicide resistance management.
+
+```{r}
+GHS_searcher<-function(result_json_object){
+  result<-result_json_object
+  for (i in 1:length(result[["result"]][["Hierarchies"]][["Hierarchy"]])){
+    if(result[["result"]][["Hierarchies"]][["Hierarchy"]][[i]][["SourceName"]]=="GHS Classification (UNECE)"){
+      return(i)
+    }
+          
+  }
+}
+```
+
+```{r}
+hazards_retriever<-function(index,result_json_object){
+  result<-result_json_object
+  hierarchy<-result[["result"]][["Hierarchies"]][["Hierarchy"]][[index]]
+  i<-1
+  output_list<-rep(NA,length(hierarchy[["Node"]]))
+  while(str_detect(hierarchy[["Node"]][[i]][["Information"]][["Name"]],"H") & i<length(hierarchy[["Node"]])){
+    output_list[i]<-hierarchy[["Node"]][[i]][["Information"]][["Name"]]
+    i<-i+1
+  }
+  return(output_list[!is.na(output_list)])
+}
+```
+
+```{r}
+chemical_vec<-c("azoxystrobin","flumioxazin")
+
+result_f<-get_pug_rest(identifier = "flumioxazin", namespace = "name", domain = "compound",operation="classification", output = "JSON")
+
+hazards_retriever(GHS_searcher(result_f),result_f)
+
+
+result_d<-get_pug_rest(identifier = "hexythiazox", namespace = "name", domain = "compound",operation="classification", output = "JSON")
+
+hazards_retriever(GHS_searcher(result_d),result_d)
+```
